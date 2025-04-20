@@ -11,8 +11,11 @@ from scipy.spatial.distance import cdist
 from collections import defaultdict
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
+from PIL import Image
+import requests
+from io import BytesIO
 
-# Load the datasets
+# ------------------------ Load Data ------------------------
 @st.cache_data
 def load_data():
     data = pd.read_csv("https://drive.google.com/uc?export=download&id=13qnQ6lZq7009GGHIN3AXSMuCkSav4dwo")
@@ -22,7 +25,7 @@ def load_data():
 
 data, genre_data, year_data = load_data()
 
-# Spotify API Setup
+# ------------------------ Spotify API Setup ------------------------
 sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(
     client_id="c02e73fdabc14437bd20b5af97e3d461",
     client_secret="774ebcd303104073835c76096b24a1d4"))
@@ -31,7 +34,7 @@ number_cols = ['valence', 'year', 'acousticness', 'danceability', 'duration_ms',
                'explicit', 'instrumentalness', 'key', 'liveness', 'loudness',
                'mode', 'popularity', 'speechiness', 'tempo']
 
-# Clustering model
+# ------------------------ Clustering ------------------------
 @st.cache_resource
 def fit_cluster_pipeline():
     X = data.select_dtypes(np.number)
@@ -42,7 +45,8 @@ def fit_cluster_pipeline():
 
 song_cluster_pipeline = fit_cluster_pipeline()
 
-# Spotify Song Lookup
+# ------------------------ Helper Functions ------------------------
+
 def find_song(name, year):
     song_data = defaultdict()
     try:
@@ -122,7 +126,22 @@ def recommend_songs(song_list, spotify_data, n_songs=10):
     rec_songs = rec_songs[~rec_songs['name'].isin(song_dict['name'])]
     return rec_songs[metadata_cols]
 
-# Streamlit UI
+# ------------------------ Album Image Fetcher ------------------------
+
+DUMMY_IMAGE = "https://via.placeholder.com/300x300.png?text=No+Image"
+
+def get_album_image(song_name, song_year):
+    try:
+        results = sp.search(q=f'track:{song_name} year:{song_year}', limit=1)
+        items = results['tracks']['items']
+        if items and 'album' in items[0] and 'images' in items[0]['album'] and items[0]['album']['images']:
+            return items[0]['album']['images'][0]['url']
+    except:
+        pass
+    return DUMMY_IMAGE
+
+# ------------------------ Streamlit UI ------------------------
+
 st.title("🎵 Music Recommendation System with Spotify API")
 
 st.sidebar.header("Input Your Favorite Songs")
@@ -139,11 +158,23 @@ if st.sidebar.button("Recommend Songs"):
     else:
         with st.spinner("🔍 Fetching recommendations..."):
             recs = recommend_songs(song_list, data)
+
         if recs.empty:
             st.warning("No recommendations found. Please check your input songs.")
         else:
             st.subheader("🔁 Recommended Songs:")
-            st.table(recs)
+            for idx, row in recs.iterrows():
+                col1, col2 = st.columns([1, 3])
+                with col1:
+                    image_url = get_album_image(row['name'], row['year'])
+                    st.image(image_url, width=120)
+                with col2:
+                    st.markdown(f"**🎵 {row['name']}**")
+                    st.markdown(f"📅 Year: {row['year']}")
+                    if 'artists' in row:
+                        st.markdown(f"🎤 Artist(s): {row['artists']}")
+
+# ------------------------ Plots ------------------------
 
 st.markdown("---")
 st.subheader("📊 Trend of Musical Features Over the Years")
