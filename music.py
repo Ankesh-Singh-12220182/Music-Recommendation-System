@@ -140,18 +140,6 @@ def get_album_image(song_name, song_year):
         pass
     return DUMMY_IMAGE
 
-# ------------------------ Audio Preview Fetcher ------------------------
-
-def get_audio_preview_url(song_name, song_year):
-    try:
-        results = sp.search(q=f'track:{song_name} year:{song_year}', limit=1)
-        items = results['tracks']['items']
-        if items and 'preview_url' in items[0]:
-            return items[0]['preview_url']
-    except:
-        pass
-    return None
-
 # ------------------------ Streamlit UI ------------------------
 
 st.title("🎵 Music Recommendation System with Spotify API")
@@ -185,13 +173,6 @@ if st.sidebar.button("Recommend Songs"):
                     st.markdown(f"📅 Year: {row['year']}")
                     if 'artists' in row:
                         st.markdown(f"🎤 Artist(s): {row['artists']}")
-
-                    # Add Audio Preview
-                    preview_url = get_audio_preview_url(row['name'], row['year'])
-                    if preview_url:
-                        st.audio(preview_url)
-                    else:
-                        st.warning("Audio preview not available.")
 
 # ------------------------ Plots ------------------------
 
