@@ -15,7 +15,8 @@ from spotipy.oauth2 import SpotifyClientCredentials
 # Load the datasets
 @st.cache_data
 def load_data():
-    data = pd.read_csv("/kaggle/input/music-dataset/data.csv")
+    data = pd.read_csv("https://drive.google.com/uc?export=download&id=13qnQ6lZq7009GGHIN3AXSMuCkSav4dwo
+")
     genre_data = pd.read_csv("data_by_genres.csv")
     year_data = pd.read_csv("data_by_year.csv")
     return data, genre_data, year_data
