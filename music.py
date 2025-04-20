@@ -11,9 +11,7 @@ from scipy.spatial.distance import cdist
 from collections import defaultdict
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
-from PIL import Image
-import requests
-from io import BytesIO
+import webbrowser
 
 # ------------------------ Load Data ------------------------
 @st.cache_data
@@ -126,7 +124,7 @@ def recommend_songs(song_list, spotify_data, n_songs=10):
     rec_songs = rec_songs[~rec_songs['name'].isin(song_dict['name'])]
     return rec_songs[metadata_cols]
 
-# ------------------------ Album Image Fetcher ------------------------
+# ------------------------ Spotify and YouTube Link Fetchers ------------------------
 
 DUMMY_IMAGE = "https://via.placeholder.com/300x300.png?text=No+Image"
 
@@ -140,17 +138,20 @@ def get_album_image(song_name, song_year):
         pass
     return DUMMY_IMAGE
 
-# ------------------------ Audio Preview Fetcher ------------------------
-
-def get_audio_preview_url(song_name, song_year):
+def get_spotify_url(song_name, song_year):
     try:
         results = sp.search(q=f'track:{song_name} year:{song_year}', limit=1)
         items = results['tracks']['items']
-        if items and 'preview_url' in items[0]:
-            return items[0]['preview_url']
+        if items and 'external_urls' in items[0]:
+            return items[0]['external_urls']['spotify']
     except:
         pass
     return None
+
+def get_youtube_url(song_name, song_year):
+    search_query = f"{song_name} {song_year} site:youtube.com"
+    search_url = f"https://www.google.com/search?q={search_query}"
+    return search_url
 
 # ------------------------ Streamlit UI ------------------------
 
@@ -186,12 +187,16 @@ if st.sidebar.button("Recommend Songs"):
                     if 'artists' in row:
                         st.markdown(f"🎤 Artist(s): {row['artists']}")
 
-                    # Add Audio Preview
-                    preview_url = get_audio_preview_url(row['name'], row['year'])
-                    if preview_url:
-                        st.audio(preview_url)
+                    # Spotify link
+                    spotify_url = get_spotify_url(row['name'], row['year'])
+                    if spotify_url:
+                        st.markdown(f"[Listen on Spotify]({spotify_url})")
                     else:
-                        st.warning("Audio preview not available.")
+                        st.warning("Spotify link not available.")
+
+                    # YouTube link
+                    youtube_url = get_youtube_url(row['name'], row['year'])
+                    st.markdown(f"[Watch on YouTube]({youtube_url})")
 
 # ------------------------ Plots ------------------------
 
