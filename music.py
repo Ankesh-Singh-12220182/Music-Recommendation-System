@@ -36,33 +36,44 @@ number_cols = ['valence', 'year', 'acousticness', 'danceability', 'duration_ms',
 def fit_cluster_pipeline():
     X = data.select_dtypes(np.number)
     pipeline = Pipeline([('scaler', StandardScaler()),
-                         ('kmeans', KMeans(n_clusters=20))])
+                         ('kmeans', KMeans(n_clusters=20, n_init=10))])
     pipeline.fit(X)
     return pipeline
 
 song_cluster_pipeline = fit_cluster_pipeline()
 
-# Recommendation System Functions
+# Spotify Song Lookup
 def find_song(name, year):
     song_data = defaultdict()
-    results = sp.search(q=f'track: {name} year: {year}', limit=1)
-    if results['tracks']['items'] == []:
+    try:
+        results = sp.search(q=f'track:{name} year:{year}', limit=1)
+        if not results['tracks']['items']:
+            return None
+
+        result = results['tracks']['items'][0]
+        track_id = result['id']
+        audio_features = sp.audio_features(track_id)
+        if not audio_features or audio_features[0] is None:
+            return None
+        audio_features = audio_features[0]
+
+        song_data['name'] = [name]
+        song_data['year'] = [year]
+        song_data['explicit'] = [int(result['explicit'])]
+        song_data['duration_ms'] = [result['duration_ms']]
+        song_data['popularity'] = [result['popularity']]
+
+        for key, value in audio_features.items():
+            song_data[key] = value
+
+        return pd.DataFrame(song_data)
+
+    except spotipy.exceptions.SpotifyException as e:
+        st.error(f"Spotify API Error: {e}")
         return None
-
-    results = results['tracks']['items'][0]
-    track_id = results['id']
-    audio_features = sp.audio_features(track_id)[0]
-
-    song_data['name'] = [name]
-    song_data['year'] = [year]
-    song_data['explicit'] = [int(results['explicit'])]
-    song_data['duration_ms'] = [results['duration_ms']]
-    song_data['popularity'] = [results['popularity']]
-
-    for key, value in audio_features.items():
-        song_data[key] = value
-
-    return pd.DataFrame(song_data)
+    except Exception as e:
+        st.error(f"Unexpected error: {e}")
+        return None
 
 def get_song_data(song, spotify_data):
     try:
@@ -77,10 +88,12 @@ def get_mean_vector(song_list, spotify_data):
     for song in song_list:
         song_data = get_song_data(song, spotify_data)
         if song_data is None:
-            st.warning(f"{song['name']} not found.")
+            st.warning(f"⚠️ {song['name']} ({song['year']}) not found. Skipping.")
             continue
         song_vector = song_data[number_cols].values
         song_vectors.append(song_vector)
+    if not song_vectors:
+        return None
     song_matrix = np.array(song_vectors)
     return np.mean(song_matrix, axis=0)
 
@@ -95,6 +108,9 @@ def recommend_songs(song_list, spotify_data, n_songs=10):
     metadata_cols = ['name', 'year', 'artists'] if 'artists' in spotify_data.columns else ['name', 'year']
     song_dict = flatten_dict_list(song_list)
     song_center = get_mean_vector(song_list, spotify_data)
+
+    if song_center is None:
+        return pd.DataFrame(columns=metadata_cols)
 
     scaler = song_cluster_pipeline.steps[0][1]
     scaled_data = scaler.transform(spotify_data[number_cols])
@@ -121,10 +137,13 @@ if st.sidebar.button("Recommend Songs"):
     if len(song_list) == 0:
         st.warning("Please enter at least one song.")
     else:
-        with st.spinner("Fetching recommendations..."):
+        with st.spinner("🔍 Fetching recommendations..."):
             recs = recommend_songs(song_list, data)
-        st.subheader("🔁 Recommended Songs:")
-        st.table(recs)
+        if recs.empty:
+            st.warning("No recommendations found. Please check your input songs.")
+        else:
+            st.subheader("🔁 Recommended Songs:")
+            st.table(recs)
 
 st.markdown("---")
 st.subheader("📊 Trend of Musical Features Over the Years")
